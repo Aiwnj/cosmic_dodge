@@ -9,9 +9,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
-    <!-- TensorFlow & Teachable Machine Libraries (Stable compatible versions) -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8.3/dist/teachablemachine-image.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
 </head>
 <body>
     <div id="app">
@@ -169,14 +171,6 @@
 
 
 
-                <!-- Prediction Probabilities (Real-time meter) -->
-                <div class="panel-section prediction-section">
-                    <h3>LIVE CLASSIFIER</h3>
-                    <div id="label-container" class="predictions-list">
-                        <!-- Dynamic prediction bars injected here -->
-                        <div class="empty-predictions">No model active.</div>
-                    </div>
-                </div>
             </aside>
         </main>
 

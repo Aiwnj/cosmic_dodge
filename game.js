@@ -45,6 +45,12 @@ class Game {
         this.powerupSpawnInterval = 600; // Frames between powerups (~10s)
         this.levelTimer = 0;
         this.levelDuration = 1800; // Level up every 30 seconds (60fps * 30)
+        this.handX = this.width / 2;
+
+        // Performance tuning
+        this.maxParticles = 300; // hard cap for particle effects
+        this.hudUpdateCounter = 0;
+        this.hudUpdateInterval = 6; // update HUD DOM every 6 frames
         
         // Screenshake
         this.shakeIntensity = 0;
@@ -72,6 +78,11 @@ class Game {
         this.autofire = true;
         this.autoLoadModel('https://teachablemachine.withgoogle.com/models/WvHZP_S56/');
 
+        // Setup responsive canvas to fill the viewport
+        this.handleResize = this.handleResize.bind(this);
+        this.handleResize();
+        window.addEventListener('resize', this.handleResize);
+
         // Start rendering immediately for the start screen background
         this.tick();
     }
@@ -83,9 +94,26 @@ class Game {
         return s;
     }
 
+    // Resize handler to make canvas fill the window
+    handleResize() {
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+
+        // Update canvas DOM size and backing store size
+        this.canvas.style.width = w + 'px';
+        this.canvas.style.height = h + 'px';
+        this.canvas.width = w;
+        this.canvas.height = h;
+
+        // Update virtual resolution used by game logic
+        this.width = w;
+        this.height = h;
+    }
+
     initStars() {
         this.stars = [];
-        for (let i = 0; i < 150; i++) {
+        // Fewer background stars to reduce draw cost
+        for (let i = 0; i < 100; i++) {
             this.stars.push({
                 x: Math.random() * this.width,
                 y: Math.random() * this.height,
@@ -118,7 +146,10 @@ class Game {
 
     initEventListeners() {
         // UI Button clicks
-        document.getElementById('play-btn').addEventListener('click', () => this.startGame());
+        // Start game immediately; webcam may be enabled separately via the panel button
+        document.getElementById('play-btn').addEventListener('click', () => {
+            this.startGame();
+        });
         document.getElementById('restart-btn').addEventListener('click', () => this.startGame());
         document.getElementById('resume-btn').addEventListener('click', () => this.resumeGame());
         
@@ -178,11 +209,14 @@ class Game {
                 document.querySelector('.webcam-ring').classList.add('connected');
                 
                 btn.textContent = "WEBCAM ACTIVE";
-                
-                // Hook prediction updates to game variables
-                window.tmLoader.onPredictionCallback = (predictions, topPrediction) => {
-                    this.handlePredictions(predictions, topPrediction);
-                };
+
+                if (!this.handIntervalId) {
+                    this.handIntervalId = setInterval(() => {
+                        if (window.tmLoader.isWebcamActive) {
+                            this.handX = window.tmLoader.indexFinger.x * this.width;
+                        }
+                    }, 16);
+                }
             } catch (e) {
                 alert(e.message);
                 btn.disabled = false;
@@ -419,7 +453,7 @@ class Game {
         }
 
         // 1. Gather Inputs
-        if (!window.tmLoader.isWebcamActive || !window.tmLoader.isModelLoaded) {
+        if (!window.tmLoader.isWebcamActive) {
             this.pollKeyboard();
         } else {
             // Even if model is loaded, allow keyboard as backup override
@@ -435,7 +469,10 @@ class Game {
         }
 
         // 2. Update Spaceship
-        this.spaceship.update(this.activeActions);
+        this.spaceship.update(
+            this.activeActions,
+            this.handX
+        );
 
         // 3. Spawners
         this.meteorSpawnTimer++;
@@ -489,7 +526,11 @@ class Game {
         }
 
         // 8. Sync indicators in HUD
-        this.updateHUDBars();
+        // Throttle DOM updates for HUD to reduce main-thread work
+        this.hudUpdateCounter = (this.hudUpdateCounter + 1) % this.hudUpdateInterval;
+        if (this.hudUpdateCounter === 0) {
+            this.updateHUDBars();
+        }
     }
 
     draw() {
@@ -547,8 +588,8 @@ class Game {
 
     spawnMeteor() {
         // Number of meteors spawned at once scales with level
-        const maxMeteorsAtOnce = 1 + Math.floor((this.level - 1) * 0.45); // Level 1: 1, Level 3: 1-2, Level 5: 1-3, Level 8: 1-4
-        const count = Math.min(4, Math.max(1, Math.floor(Math.random() * maxMeteorsAtOnce) + 1));
+        const maxMeteorsAtOnce = 2 + Math.floor((this.level - 1) * 0.55); // Level 1: 2, Level 3: 3-4, Level 5: 4-5
+        const count = Math.min(6, Math.max(2, Math.floor(Math.random() * maxMeteorsAtOnce) + 1));
         
         for (let i = 0; i < count; i++) {
             this.createSingleMeteor();
@@ -574,7 +615,7 @@ class Game {
 
         // Speed increases more aggressively with level
         const speedMultiplier = 1 + (this.level - 1) * 0.35;
-        const vy = (Math.random() * 2 + 1.5) * speedMultiplier;
+        const vy = (Math.random() * 2.2 + 2.0) * speedMultiplier;
         const vx = (Math.random() * 1.5 - 0.75) * speedMultiplier;
         const rx = Math.random() * (this.width - 60) + 30;
 
@@ -744,6 +785,10 @@ class Game {
                 0.015 + Math.random() * 0.02
             ));
         }
+        // Enforce particle cap
+        if (this.particles.length > this.maxParticles) {
+            this.particles.splice(0, this.particles.length - this.maxParticles);
+        }
     }
 
     createRippleWave(x, y, color) {
@@ -760,6 +805,9 @@ class Game {
                 0.025
             ));
         }
+        if (this.particles.length > this.maxParticles) {
+            this.particles.splice(0, this.particles.length - this.maxParticles);
+        }
     }
 
     createLevelUpWave() {
@@ -775,6 +823,9 @@ class Game {
                 1.0,
                 0.015
             ));
+        }
+        if (this.particles.length > this.maxParticles) {
+            this.particles.splice(0, this.particles.length - this.maxParticles);
         }
     }
 
@@ -848,7 +899,7 @@ class Spaceship {
         this.damageFlashTime = 0;
     }
 
-    update(actions) {
+    update(actions, handX = null) {
         // Friction dampening
         this.vx *= this.friction;
 
@@ -862,6 +913,21 @@ class Spaceship {
 
         // Move spaceship
         this.x += this.vx;
+
+        if (handX !== null) {
+
+            this.x =
+                this.x * 0.8 +
+                handX * 0.2;
+
+            this.x = Math.max(
+                this.width / 2,
+                Math.min(
+                    this.game.width - this.width / 2,
+                    this.x
+                )
+            );
+        }
 
         // Keep inside bounds
         const halfW = this.width / 2;

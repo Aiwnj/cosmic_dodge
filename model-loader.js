@@ -1,169 +1,184 @@
-// Teachable Machine Model Loader & Webcam Controller
-class TMModelLoader {
+class MediaPipeController {
     constructor() {
         this.model = null;
-        this.webcam = null;
-        this.maxPredictions = 0;
-        this.isModelLoaded = false;
+        this.video = null;
+        this.camera = null;
+        this.hands = null;
         this.isWebcamActive = false;
+        this.isModelLoaded = false;
         this.classNames = [];
-        this.activePrediction = null; // Current winning prediction above threshold
-        
-        // Callbacks
+        this.maxPredictions = 0;
+        this.predictionPending = false;
+        this.lastPredictionTime = 0;
+        this.predictionInterval = 120; // ms
         this.onModelLoadedCallback = null;
         this.onPredictionCallback = null;
-        
-        this.loopActive = false;
+
+        this.indexFinger = {
+            x: 0.5,
+            y: 0.5
+        };
     }
 
-    // Load from public cloud URL
+    async setupWebcam(containerId) {
+        const container = document.getElementById(containerId);
+
+        this.video = document.createElement("video");
+        this.video.autoplay = true;
+        this.video.playsInline = true;
+        this.video.muted = true;
+        this.video.style.width = "200px";
+        this.video.style.transform = "scaleX(-1)";
+
+        container.innerHTML = "";
+        container.appendChild(this.video);
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: true
+        });
+
+        this.video.srcObject = stream;
+
+        this.hands = new Hands({
+            locateFile: file =>
+                `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        this.hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.7,
+            minTrackingConfidence: 0.7,
+            selfieMode: true
+        });
+
+        this.hands.onResults(results => {
+            if (
+                results.multiHandLandmarks &&
+                results.multiHandLandmarks.length > 0
+            ) {
+                const hand = results.multiHandLandmarks[0];
+                this.indexFinger.x = hand[8].x;
+                this.indexFinger.y = hand[8].y;
+            }
+        });
+
+        this.camera = new Camera(this.video, {
+            onFrame: async () => {
+                await this.hands.send({
+                    image: this.video
+                });
+
+                const now = performance.now();
+                if (
+                    this.isModelLoaded &&
+                    this.model &&
+                    this.onPredictionCallback &&
+                    now - this.lastPredictionTime >= this.predictionInterval
+                ) {
+                    this.lastPredictionTime = now;
+                    await this.predict();
+                }
+            },
+            width: 320,
+            height: 240
+        });
+
+        await this.camera.start();
+        this.isWebcamActive = true;
+    }
+
     async loadFromURL(url) {
         if (!url) throw new Error("URL cannot be empty");
-        
-        // Ensure trailing slash
-        if (!url.endsWith('/')) {
-            url += '/';
-        }
+        if (!url.endsWith('/')) url += '/';
 
         const modelURL = url + "model.json";
         const metadataURL = url + "metadata.json";
 
-        try {
-            console.log(`Loading Teachable Machine model from ${url}...`);
-            this.model = await tmImage.load(modelURL, metadataURL);
-            this.maxPredictions = this.model.getTotalClasses();
-            this.classNames = this.model.getClassLabels();
-            this.isModelLoaded = true;
-            
-            console.log("Model loaded successfully. Classes:", this.classNames);
-            
-            if (this.onModelLoadedCallback) {
-                this.onModelLoadedCallback(this.classNames);
-            }
-            
-            return this.classNames;
-        } catch (e) {
-            console.error("Failed to load model from URL: ", e);
-            throw new Error("Invalid model URL or network error. Please verify the link.");
+        this.model = await tmImage.load(modelURL, metadataURL);
+        this.maxPredictions = this.model.getTotalClasses();
+        this.classNames = this.model.getClassLabels();
+        this.isModelLoaded = true;
+
+        if (this.onModelLoadedCallback) {
+            this.onModelLoadedCallback(this.classNames);
         }
+
+        return this.classNames;
     }
 
-    // Load from local file uploads
     async loadFromFiles(modelJson, weightsBin, metadataJson) {
         if (!modelJson || !weightsBin || !metadataJson) {
-            throw new Error("Please select all three required model files (model.json, weights.bin, metadata.json).");
+            throw new Error("Please select all three required model files (model.json, weights.bin, metadata.json). ");
         }
 
-        try {
-            console.log("Loading model from local files...");
-            this.model = await tmImage.loadFromFiles(modelJson, weightsBin, metadataJson);
-            this.maxPredictions = this.model.getTotalClasses();
-            this.classNames = this.model.getClassLabels();
-            this.isModelLoaded = true;
-            
-            console.log("Local model loaded successfully. Classes:", this.classNames);
-            
-            if (this.onModelLoadedCallback) {
-                this.onModelLoadedCallback(this.classNames);
-            }
-            
-            return this.classNames;
-        } catch (e) {
-            console.error("Failed to load model from files: ", e);
-            throw new Error("Failed to load local model files. Make sure they are unmodified Teachable Machine exports.");
+        this.model = await tmImage.loadFromFiles(modelJson, weightsBin, metadataJson);
+        this.maxPredictions = this.model.getTotalClasses();
+        this.classNames = this.model.getClassLabels();
+        this.isModelLoaded = true;
+
+        if (this.onModelLoadedCallback) {
+            this.onModelLoadedCallback(this.classNames);
         }
+
+        return this.classNames;
     }
 
-    // Setup and enable the webcam
-    async setupWebcam(containerId) {
-        if (this.isWebcamActive) return;
+    async predict() {
+        if (!this.model || !this.video || this.predictionPending) return;
 
-        const container = document.getElementById(containerId);
-        if (!container) throw new Error(`Webcam container #${containerId} not found`);
-
+        this.predictionPending = true;
         try {
-            console.log("Requesting camera access...");
-            const flip = true; // mirror mode
-            this.webcam = new tmImage.Webcam(200, 200, flip);
-            
-            await this.webcam.setup(); // Throws if camera blocked
-            await this.webcam.play();
-            
-            // Clear placeholder and append webcam canvas
-            container.innerHTML = '';
-            container.appendChild(this.webcam.canvas);
-            
-            this.isWebcamActive = true;
-            console.log("Webcam activated and playing.");
-            
-            // Start processing loop if not already running
-            if (!this.loopActive) {
-                this.loopActive = true;
-                window.requestAnimationFrame(() => this.loop());
-            }
-        } catch (e) {
-            console.error("Camera access failed: ", e);
-            this.isWebcamActive = false;
-            throw new Error("Webcam access denied. Please allow camera permissions in your browser settings.");
-        }
-    }
+            const prediction = await this.model.predict(this.video);
+            let highestIndex = 0;
+            let highestProb = 0;
 
-    // Continuous webcam update & prediction loop
-    async loop() {
-        if (!this.loopActive) return;
-
-        try {
-            if (this.isWebcamActive && this.webcam) {
-                this.webcam.update(); // Update webcam frame
-                
-                if (this.isModelLoaded && this.model) {
-                    await this.predict();
+            for (let i = 0; i < this.maxPredictions; i++) {
+                if (prediction[i].probability > highestProb) {
+                    highestProb = prediction[i].probability;
+                    highestIndex = i;
                 }
             }
-        } catch (e) {
-            console.error("Error in webcam loop: ", e);
-        }
 
-        window.requestAnimationFrame(() => this.loop());
-    }
+            const topPrediction = {
+                className: prediction[highestIndex].className,
+                probability: highestProb,
+                index: highestIndex
+            };
 
-    // Run webcam canvas through TM model
-    async predict() {
-        if (!this.model || !this.webcam) return;
-
-        const prediction = await this.model.predict(this.webcam.canvas);
-        
-        // Find highest scoring class
-        let highestIndex = 0;
-        let highestProb = 0;
-
-        for (let i = 0; i < this.maxPredictions; i++) {
-            if (prediction[i].probability > highestProb) {
-                highestProb = prediction[i].probability;
-                highestIndex = i;
+            if (this.onPredictionCallback) {
+                this.onPredictionCallback(prediction, topPrediction);
             }
-        }
 
-        const topPrediction = {
-            className: prediction[highestIndex].className,
-            probability: highestProb,
-            index: highestIndex
-        };
-
-        if (this.onPredictionCallback) {
-            this.onPredictionCallback(prediction, topPrediction);
+            return { prediction, topPrediction };
+        } finally {
+            this.predictionPending = false;
         }
     }
 
     stop() {
-        this.loopActive = false;
-        if (this.webcam) {
-            this.webcam.stop();
+        if (this.camera) {
+            try {
+                this.camera.stop();
+            } catch (e) {
+                console.warn('Unable to stop MediaPipe camera:', e);
+            }
         }
+
+        if (this.video) {
+            if (this.video.srcObject) {
+                this.video.srcObject.getTracks().forEach(track => track.stop());
+            }
+            if (this.video.parentNode) {
+                this.video.parentNode.removeChild(this.video);
+            }
+            this.video = null;
+        }
+
         this.isWebcamActive = false;
+        this.isModelLoaded = false;
+        this.handDetected = false;
     }
 }
 
-// Global single instance export
-const tmLoader = new TMModelLoader();
-window.tmLoader = tmLoader;
+window.tmLoader = new MediaPipeController();

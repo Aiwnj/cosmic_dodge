@@ -64,6 +64,11 @@ header {
     margin-bottom: 15px;
 }
 
+/* Hide header for fullscreen play */
+header {
+    display: none;
+}
+
 .header-logo {
     font-family: var(--font-game);
     font-weight: 900;
@@ -124,7 +129,7 @@ header {
    ========================================================================== */
 .grid-container {
     display: grid;
-    grid-template-columns: 8fr 4fr;
+    grid-template-columns: 1fr;
     gap: 20px;
     flex-grow: 1;
     min-height: 0; /* Important for scroll container behavior */
@@ -142,13 +147,14 @@ header {
     overflow: hidden;
 }
 
+/* Make the game wrapper fill the viewport for an immersive fullscreen-like experience */
 #game-wrapper {
-    position: relative;
-    width: 800px;
-    height: 600px;
-    aspect-ratio: 4/3;
-    max-width: 100%;
-    max-height: 100%;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 40;
 }
 
 #game-canvas {
@@ -425,16 +431,23 @@ header {
    GLASS PANEL (CONTROL CENTER)
    ========================================================================== */
 .control-panel {
+    /* Floating compact control widget */
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    width: 220px;
+    max-height: 360px;
+    overflow: hidden;
     background: var(--color-bg-card);
     border: 1px solid var(--color-border);
     border-radius: 12px;
-    backdrop-filter: blur(12px);
-    padding: 20px;
+    backdrop-filter: blur(8px);
+    padding: 12px;
     display: flex;
     flex-direction: column;
-    gap: 20px;
-    overflow-y: auto;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    gap: 12px;
+    z-index: 60;
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
 }
 
 /* Custom Scrollbar for panel */
@@ -481,14 +494,15 @@ header {
 }
 
 .webcam-ring {
-    width: 170px;
-    height: 170px;
-    border-radius: 50%;
-    padding: 5px;
-    background: linear-gradient(135deg, rgba(0, 240, 255, 0.2), rgba(255, 0, 127, 0.2));
+    /* Rectangular webcam display with slight rounding */
+    width: 140px;
+    height: 96px;
+    border-radius: 10px;
+    padding: 4px;
+    background: linear-gradient(135deg, rgba(0, 240, 255, 0.12), rgba(255, 0, 127, 0.12));
     overflow: hidden;
     position: relative;
-    box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
+    box-shadow: inset 0 0 8px rgba(0,0,0,0.7);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -508,7 +522,7 @@ header {
 #webcam-container {
     width: 100%;
     height: 100%;
-    border-radius: 50%;
+    border-radius: 8px;
     overflow: hidden;
     position: relative;
     background: #020206;
