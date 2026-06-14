@@ -11,27 +11,12 @@ const STATE = {
 class Game {
     constructor() {
         this.canvas = document.getElementById('game-canvas');
-        this.ctx = this.canvas.getContext('2d', { alpha: false });
+        this.ctx = this.canvas.getContext('2d');
         this.state = STATE.START;
         
         // Base dimensions (virtual resolution)
         this.width = 800;
         this.height = 600;
-        
-        // Cache HUD DOM refs for lower frame cost
-        this.hudScoreEl = document.getElementById('hud-score');
-        this.hudLevelEl = document.getElementById('hud-level');
-        this.hullBarEl = document.getElementById('hull-bar');
-        this.hullPctEl = document.getElementById('hull-pct');
-        this.shieldBarEl = document.getElementById('shield-bar');
-        this.shieldPctEl = document.getElementById('shield-pct');
-        this.hudHighscoreEl = document.getElementById('hud-highscore');
-        this.finalScoreEl = document.getElementById('final-score');
-        this.finalLevelEl = document.getElementById('final-level');
-        this.screenOverlay = document.getElementById('screen-overlay');
-        this.startScreen = document.getElementById('start-screen');
-        this.gameOverScreen = document.getElementById('game-over-screen');
-        this.pauseScreen = document.getElementById('pause-screen');
         
         // High Score Persistence (Safe from local file system SecurityError)
         let savedHighScore = 0;
@@ -41,42 +26,7 @@ class Game {
             console.warn("localStorage is not accessible in this context:", e);
         }
         this.highscore = savedHighScore;
-<<<<<<< HEAD
-        this.hudHighscoreEl = document.getElementById('hud-highscore');
-        this.hudScoreEl = document.getElementById('hud-score');
-        this.hudLevelEl = document.getElementById('hud-level');
-        this.hudEl = document.getElementById('hud');
-        this.hullBarEl = document.getElementById('hull-bar');
-        this.hullPctEl = document.getElementById('hull-pct');
-        this.shieldBarEl = document.getElementById('shield-bar');
-        this.shieldPctEl = document.getElementById('shield-pct');
-        this.screenOverlayEl = document.getElementById('screen-overlay');
-        this.startScreenEl = document.getElementById('start-screen');
-        this.gameOverScreenEl = document.getElementById('game-over-screen');
-        this.pauseScreenEl = document.getElementById('pause-screen');
-        this.finalScoreEl = document.getElementById('final-score');
-        this.finalLevelEl = document.getElementById('final-level');
-        this.webcamStatusIndicatorEl = document.getElementById('webcam-status-indicator');
-        this.webcamStatusTextEl = document.getElementById('webcam-status-text');
-        this.webcamRingEl = document.querySelector('.webcam-ring');
-        this.initWebcamBtnEl = document.getElementById('init-webcam-btn');
-        this.helpModalEl = document.getElementById('help-modal');
-        this.soundIconEl = document.getElementById('sound-icon');
-        this.playBtnEl = document.getElementById('play-btn');
-        this.restartBtnEl = document.getElementById('restart-btn');
-        this.resumeBtnEl = document.getElementById('resume-btn');
-        this.helpBtnEl = document.getElementById('help-btn');
-        this.closeHelpBtnEl = document.getElementById('close-help-btn');
-        this.soundBtnEl = document.getElementById('sound-btn');
-        this.labelContainerEl = document.getElementById('label-container');
-        this.predictionElements = {};
-
-        this.hudHighscoreEl.textContent = this.pad(this.highscore, 6);
-=======
-        if (this.hudHighscoreEl) {
-            this.hudHighscoreEl.textContent = this.pad(this.highscore, 6);
-        }
->>>>>>> 5ef924e2d94ea81fec07d8cb4ae44ccda6d26a7a
+        document.getElementById('hud-highscore').textContent = this.pad(this.highscore, 6);
 
         // Core Game Entities
         this.spaceship = null;
@@ -95,15 +45,13 @@ class Game {
         this.powerupSpawnInterval = 600; // Frames between powerups (~10s)
         this.levelTimer = 0;
         this.levelDuration = 1800; // Level up every 30 seconds (60fps * 30)
+        this.survivalScoreCarry = 0; // accumulate smooth score increments
         this.handX = this.width / 2;
-        this.distanceScoreBuffer = 0;
-        this.survivalScoreBuffer = 0;
 
         // Performance tuning
-        this.maxParticles = 150; // hard cap for particle effects
+        this.maxParticles = 300; // hard cap for particle effects
         this.hudUpdateCounter = 0;
-        this.hudUpdateInterval = 12; // update HUD DOM every 12 frames
-        this.starCount = 70;
+        this.hudUpdateInterval = 6; // update HUD DOM every 6 frames
         
         // Screenshake
         this.shakeIntensity = 0;
@@ -165,13 +113,14 @@ class Game {
 
     initStars() {
         this.stars = [];
-        for (let i = 0; i < this.starCount; i++) {
+        // Fewer background stars to reduce draw cost
+        for (let i = 0; i < 100; i++) {
             this.stars.push({
                 x: Math.random() * this.width,
                 y: Math.random() * this.height,
-                size: Math.random() * 1.4 + 0.4,
-                speed: Math.random() * 1.2 + 0.2,
-                color: `hsla(${200 + Math.random() * 60}, 100%, 85%, ${Math.random() * 0.3 + 0.25})`
+                size: Math.random() * 2 + 0.5,
+                speed: Math.random() * 1.5 + 0.2,
+                color: `hsla(${200 + Math.random() * 60}, 100%, 85%, ${Math.random() * 0.4 + 0.3})`
             });
         }
     }
@@ -190,30 +139,33 @@ class Game {
     drawStars() {
         this.stars.forEach(star => {
             this.ctx.fillStyle = star.color;
-            this.ctx.fillRect(star.x, star.y, star.size, star.size);
+            this.ctx.beginPath();
+            this.ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+            this.ctx.fill();
         });
     }
 
     initEventListeners() {
         // UI Button clicks
         // Start game immediately; webcam may be enabled separately via the panel button
-        this.playBtnEl.addEventListener('click', () => {
+        document.getElementById('play-btn').addEventListener('click', () => {
             this.startGame();
         });
-        this.restartBtnEl.addEventListener('click', () => this.startGame());
-        this.resumeBtnEl.addEventListener('click', () => this.resumeGame());
+        document.getElementById('restart-btn').addEventListener('click', () => this.startGame());
+        document.getElementById('resume-btn').addEventListener('click', () => this.resumeGame());
         
         // Help modal toggles
-        this.helpBtnEl.addEventListener('click', () => this.helpModalEl.classList.remove('hidden'));
-        this.closeHelpBtnEl.addEventListener('click', () => this.helpModalEl.classList.add('hidden'));
-        this.helpModalEl.addEventListener('click', (e) => {
-            if (e.target === this.helpModalEl) this.helpModalEl.classList.add('hidden');
+        const helpModal = document.getElementById('help-modal');
+        document.getElementById('help-btn').addEventListener('click', () => helpModal.classList.remove('hidden'));
+        document.getElementById('close-help-btn').addEventListener('click', () => helpModal.classList.add('hidden'));
+        helpModal.addEventListener('click', (e) => {
+            if (e.target === helpModal) helpModal.classList.add('hidden');
         });
         
         // Sound toggler
-        this.soundBtnEl.addEventListener('click', () => {
+        document.getElementById('sound-btn').addEventListener('click', () => {
             const isMuted = window.audio.toggleMute();
-            const icon = this.soundIconEl;
+            const icon = document.getElementById('sound-icon');
             if (isMuted) {
                 // Sound Off Icon Path
                 icon.innerHTML = `<path fill="var(--color-secondary)" d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.21.05-.42.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>`;
@@ -244,8 +196,8 @@ class Game {
 
 
         // Setup Webcam button
-        this.initWebcamBtnEl.addEventListener('click', async () => {
-            const btn = this.initWebcamBtnEl;
+        document.getElementById('init-webcam-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('init-webcam-btn');
             btn.disabled = true;
             btn.textContent = "INITIALIZING...";
 
@@ -253,9 +205,9 @@ class Game {
                 await window.tmLoader.setupWebcam('webcam-container');
                 
                 // Update status UI
-                this.webcamStatusIndicatorEl.classList.add('active');
-                this.webcamStatusTextEl.textContent = "CONNECTED";
-                this.webcamRingEl.classList.add('connected');
+                document.getElementById('webcam-status-indicator').classList.add('active');
+                document.getElementById('webcam-status-text').textContent = "CONNECTED";
+                document.querySelector('.webcam-ring').classList.add('connected');
                 
                 btn.textContent = "WEBCAM ACTIVE";
 
@@ -282,14 +234,16 @@ class Game {
             const classes = await window.tmLoader.loadFromURL(url);
             this.setupMappingUI(classes);
             
-            if (this.initWebcamBtnEl) {
-                this.initWebcamBtnEl.disabled = false;
-                this.initWebcamBtnEl.textContent = "ENABLE WEBCAM";
+            const btn = document.getElementById('init-webcam-btn');
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = "ENABLE WEBCAM";
             }
         } catch (e) {
             console.error("Failed to load user model:", e);
-            if (this.initWebcamBtnEl) {
-                this.initWebcamBtnEl.textContent = "MODEL LOAD ERROR";
+            const btn = document.getElementById('init-webcam-btn');
+            if (btn) {
+                btn.textContent = "MODEL LOAD ERROR";
             }
         }
     }
@@ -298,20 +252,13 @@ class Game {
         window.audio.resumeContext();
         
         // Hide Screens
-<<<<<<< HEAD
-        this.screenOverlayEl.classList.add('hidden');
-        this.startScreenEl.classList.add('hidden');
-        this.gameOverScreenEl.classList.add('hidden');
-        this.pauseScreenEl.classList.add('hidden');
-=======
-        if (this.screenOverlay) this.screenOverlay.classList.add('hidden');
-        if (this.startScreen) this.startScreen.classList.add('hidden');
-        if (this.gameOverScreen) this.gameOverScreen.classList.add('hidden');
-        if (this.pauseScreen) this.pauseScreen.classList.add('hidden');
->>>>>>> 5ef924e2d94ea81fec07d8cb4ae44ccda6d26a7a
+        document.getElementById('screen-overlay').classList.add('hidden');
+        document.getElementById('start-screen').classList.add('hidden');
+        document.getElementById('game-over-screen').classList.add('hidden');
+        document.getElementById('pause-screen').classList.add('hidden');
         
         // Show HUD
-        this.hudEl.classList.remove('hidden');
+        document.getElementById('hud').classList.remove('hidden');
         
         // Reset Game variables
         this.score = 0;
@@ -320,8 +267,7 @@ class Game {
         this.meteorSpawnTimer = 0;
         this.powerupSpawnTimer = 350; // Spawn first powerup sooner (~4 seconds)
         this.levelTimer = 0;
-        this.distanceScoreBuffer = 0;
-        this.survivalScoreBuffer = 0;
+        this.survivalScoreCarry = 0;
         
         this.spaceship = new Spaceship(this.width / 2, this.height - 80, this);
         this.meteors = [];
@@ -336,24 +282,14 @@ class Game {
     pauseGame() {
         if (this.state !== STATE.PLAYING) return;
         this.state = STATE.PAUSED;
-<<<<<<< HEAD
-        this.screenOverlayEl.classList.remove('hidden');
-        this.pauseScreenEl.classList.remove('hidden');
-=======
-        if (this.screenOverlay) this.screenOverlay.classList.remove('hidden');
-        if (this.pauseScreen) this.pauseScreen.classList.remove('hidden');
->>>>>>> 5ef924e2d94ea81fec07d8cb4ae44ccda6d26a7a
+        document.getElementById('screen-overlay').classList.remove('hidden');
+        document.getElementById('pause-screen').classList.remove('hidden');
     }
 
     resumeGame() {
         if (this.state !== STATE.PAUSED) return;
-<<<<<<< HEAD
-        this.screenOverlayEl.classList.add('hidden');
-        this.pauseScreenEl.classList.add('hidden');
-=======
-        if (this.screenOverlay) this.screenOverlay.classList.add('hidden');
-        if (this.pauseScreen) this.pauseScreen.classList.add('hidden');
->>>>>>> 5ef924e2d94ea81fec07d8cb4ae44ccda6d26a7a
+        document.getElementById('screen-overlay').classList.add('hidden');
+        document.getElementById('pause-screen').classList.add('hidden');
         this.state = STATE.PLAYING;
     }
 
@@ -366,9 +302,9 @@ class Game {
         const shipY = this.spaceship.y;
         
         // Spawn massive blast particles (fire and neon shockwaves)
-        this.createSparks(shipX, shipY, '#ff007f', 22); // Magenta blast
-        this.createSparks(shipX, shipY, '#00f0ff', 22); // Cyan blast
-        this.createSparks(shipX, shipY, '#ffffff', 12); // White core blast
+        this.createSparks(shipX, shipY, '#ff007f', 40); // Magenta blast
+        this.createSparks(shipX, shipY, '#00f0ff', 40); // Cyan blast
+        this.createSparks(shipX, shipY, '#ffffff', 20); // White core blast
         
         this.createRippleWave(shipX, shipY, '#ff007f'); // Magenta shockwave
         setTimeout(() => this.createRippleWave(shipX, shipY, '#00f0ff'), 150); // Cyan shockwave
@@ -397,30 +333,16 @@ class Game {
             } catch (e) {
                 console.warn("Could not save high score to localStorage:", e);
             }
-<<<<<<< HEAD
-            this.hudHighscoreEl.textContent = this.pad(this.highscore, 6);
+            document.getElementById('hud-highscore').textContent = this.pad(this.highscore, 6);
         }
 
         // Show game over screens
-        this.finalScoreEl.textContent = this.score;
-        this.finalLevelEl.textContent = this.level;
-        this.hudEl.classList.add('hidden');
-        
-        this.screenOverlayEl.classList.remove('hidden');
-        this.gameOverScreenEl.classList.remove('hidden');
-=======
-            if (this.hudHighscoreEl) {
-                this.hudHighscoreEl.textContent = this.pad(this.highscore, 6);
-            }
-        }
-
-        // Show game over screens
-        if (this.finalScoreEl) this.finalScoreEl.textContent = this.score;
-        if (this.finalLevelEl) this.finalLevelEl.textContent = this.level;
+        document.getElementById('final-score').textContent = this.score;
+        document.getElementById('final-level').textContent = this.level;
         document.getElementById('hud').classList.add('hidden');
-        if (this.screenOverlay) this.screenOverlay.classList.remove('hidden');
-        if (this.gameOverScreen) this.gameOverScreen.classList.remove('hidden');
->>>>>>> 5ef924e2d94ea81fec07d8cb4ae44ccda6d26a7a
+        
+        document.getElementById('screen-overlay').classList.remove('hidden');
+        document.getElementById('game-over-screen').classList.remove('hidden');
     }
 
     // Dynamic configuration UI based on model classes
@@ -444,10 +366,9 @@ class Game {
         });
 
         // Initialize prediction list UI container
-        const labelContainer = this.labelContainerEl;
+        const labelContainer = document.getElementById('label-container');
         if (labelContainer) {
             labelContainer.innerHTML = '';
-            this.predictionElements = {};
             classes.forEach(cls => {
                 const predItem = document.createElement('div');
                 predItem.className = 'prediction-item';
@@ -463,10 +384,6 @@ class Game {
                     </div>
                 `;
                 labelContainer.appendChild(predItem);
-                this.predictionElements[classId] = {
-                    valueEl: predItem.querySelector(`#pred-val-${classId}`),
-                    fillEl: predItem.querySelector(`#pred-fill-${classId}`)
-                };
             });
         }
     }
@@ -486,11 +403,12 @@ class Game {
             const classId = p.className.replace(/\s+/g, '_');
             
             // Update UI list meters
-            const predEls = this.predictionElements[classId];
+            const valSpan = document.getElementById(`pred-val-${classId}`);
+            const fillDiv = document.getElementById(`pred-fill-${classId}`);
             
-            if (predEls && predEls.valueEl && predEls.fillEl) {
-                predEls.valueEl.textContent = pct + '%';
-                predEls.fillEl.style.width = pct + '%';
+            if (valSpan && fillDiv) {
+                valSpan.textContent = pct + '%';
+                fillDiv.style.width = pct + '%';
                 
                 // If top active, add neon glow
                 if (p.className === topPrediction.className && p.probability >= this.confidenceThreshold) {
@@ -558,24 +476,6 @@ class Game {
             this.handX
         );
 
-        // Distance traveled scoring: reward movement and time on the field
-        this.distanceScoreBuffer += Math.abs(this.spaceship.vx) * 0.15;
-        if (this.distanceScoreBuffer >= 1) {
-            const points = Math.floor(this.distanceScoreBuffer);
-            this.distanceScoreBuffer -= points;
-            this.score += points;
-            this.updateHUD();
-        }
-
-        // Survival score: continue building score until ship is destroyed
-        this.survivalScoreBuffer += 0.11;
-        if (this.survivalScoreBuffer >= 1) {
-            const points = Math.floor(this.survivalScoreBuffer);
-            this.survivalScoreBuffer -= points;
-            this.score += points;
-            this.updateHUD();
-        }
-
         // 3. Spawners
         this.meteorSpawnTimer++;
         if (this.meteorSpawnTimer >= this.meteorSpawnInterval) {
@@ -602,6 +502,15 @@ class Game {
             
             // Level up particle wave
             this.createLevelUpWave();
+            this.updateHUD();
+        }
+
+        // 4a. Survival score grows smoothly while the ship remains alive
+        this.survivalScoreCarry += 0.4 + this.level * 0.03;
+        if (this.survivalScoreCarry >= 1) {
+            const addPoints = Math.floor(this.survivalScoreCarry);
+            this.score += addPoints;
+            this.survivalScoreCarry -= addPoints;
             this.updateHUD();
         }
 
@@ -741,11 +650,8 @@ class Game {
                 const meteor = this.meteors[mIdx];
                 
                 // Circle-AABB approximation (simple circle vs circle is faster and good enough here)
-                const dx = laser.x - meteor.x;
-                const dy = laser.y - meteor.y;
-                const distSq = dx * dx + dy * dy;
-                const radiusSq = (meteor.radius + 6) * (meteor.radius + 6);
-                if (distSq < radiusSq) {
+                const dist = Math.hypot(laser.x - meteor.x, laser.y - meteor.y);
+                if (dist < meteor.radius + 6) {
                     // Hit!
                     meteor.health--;
                     this.lasers.splice(lIdx, 1);
@@ -769,13 +675,10 @@ class Game {
         const ship = this.spaceship;
         for (let mIdx = this.meteors.length - 1; mIdx >= 0; mIdx--) {
             const meteor = this.meteors[mIdx];
-            const dx = ship.x - meteor.x;
-            const dy = ship.y - meteor.y;
-            const distSq = dx * dx + dy * dy;
-            const radiusSq = (meteor.radius + ship.hitRadius) * (meteor.radius + ship.hitRadius);
+            const dist = Math.hypot(ship.x - meteor.x, ship.y - meteor.y);
             
             // Check bounding circle collision
-            if (distSq < radiusSq) {
+            if (dist < meteor.radius + ship.hitRadius) {
                 const damage = meteor.radius * 0.8;
                 
                 if (ship.shield > 0) {
@@ -818,11 +721,9 @@ class Game {
         // 3. Spaceship vs Powerups
         for (let pIdx = this.powerups.length - 1; pIdx >= 0; pIdx--) {
             const pu = this.powerups[pIdx];
-            const dx = ship.x - pu.x;
-            const dy = ship.y - pu.y;
-            const distSq = dx * dx + dy * dy;
+            const dist = Math.hypot(ship.x - pu.x, ship.y - pu.y);
             
-            if (distSq < (pu.radius + ship.hitRadius) * (pu.radius + ship.hitRadius)) {
+            if (dist < pu.radius + ship.hitRadius) {
                 // Collect powerup!
                 this.applyPowerup(pu.type);
                 this.powerups.splice(pIdx, 1);
@@ -841,15 +742,18 @@ class Game {
         const color = meteor.type === 'large' ? '#ff6b35' : (meteor.type === 'medium' ? '#ffb703' : '#a0a0a0');
         this.createSparks(meteor.x, meteor.y, color, meteor.radius * 0.6);
         
-        // Split mechanics and score reward for destroyed meteors
+        // Split mechanics
         if (meteor.type === 'large') {
             this.splitMeteor(meteor, 'medium');
-            this.score += 250;
+            this.score += 150;
+            this.score += 20; // small bonus for destroying a meteor
         } else if (meteor.type === 'medium') {
             this.splitMeteor(meteor, 'small');
-            this.score += 160;
+            this.score += 100;
+            this.score += 15; // small bonus for destroying a meteor
         } else {
-            this.score += 90;
+            this.score += 50;
+            this.score += 10; // small bonus for destroying a meteor
         }
         
         this.updateHUD();
@@ -902,8 +806,8 @@ class Game {
     }
 
     createRippleWave(x, y, color) {
-        for (let i = 0; i < 18; i++) {
-            const angle = (i / 18) * Math.PI * 2;
+        for (let i = 0; i < 30; i++) {
+            const angle = (i / 30) * Math.PI * 2;
             const speed = 3.5;
             this.particles.push(new Particle(
                 x, y,
@@ -921,8 +825,8 @@ class Game {
     }
 
     createLevelUpWave() {
-        for (let i = 0; i < 32; i++) {
-            const angle = (i / 32) * Math.PI * 2;
+        for (let i = 0; i < 60; i++) {
+            const angle = (i / 60) * Math.PI * 2;
             const speed = 5;
             this.particles.push(new Particle(
                 this.width / 2, this.height / 2,
@@ -941,13 +845,8 @@ class Game {
 
     // Sync HUD Text
     updateHUD() {
-<<<<<<< HEAD
-        this.hudScoreEl.textContent = this.pad(this.score, 6);
-        this.hudLevelEl.textContent = this.level;
-=======
-        if (this.hudScoreEl) this.hudScoreEl.textContent = this.pad(this.score, 6);
-        if (this.hudLevelEl) this.hudLevelEl.textContent = this.level;
->>>>>>> 5ef924e2d94ea81fec07d8cb4ae44ccda6d26a7a
+        document.getElementById('hud-score').textContent = this.pad(this.score, 6);
+        document.getElementById('hud-level').textContent = this.level;
     }
 
     // Sync HUD gauges smoothly
@@ -957,32 +856,10 @@ class Game {
         const ship = this.spaceship;
         
         // Hull bar sync
-<<<<<<< HEAD
-        const hullBar = this.hullBarEl;
-        const hullPct = this.hullPctEl;
+        const hullBar = document.getElementById('hull-bar');
+        const hullPct = document.getElementById('hull-pct');
         hullBar.style.width = ship.health + '%';
         hullPct.textContent = Math.round(ship.health) + '%';
-=======
-        if (this.hullBarEl) {
-            this.hullBarEl.style.width = ship.health + '%';
-            this.hullBarEl.className = 'hud-gauge-bar-fill';
-            if (ship.health > 50) {
-                this.hullBarEl.classList.add('green-glow');
-            } else if (ship.health > 25) {
-                this.hullBarEl.classList.add('orange-glow');
-            } else {
-                this.hullBarEl.classList.add('red-glow');
-            }
-        }
-        if (this.hullPctEl) this.hullPctEl.textContent = Math.round(ship.health) + '%';
-
-        // Shield bar sync
-        if (this.shieldBarEl) {
-            this.shieldBarEl.style.width = ship.shield + '%';
-        }
-        if (this.shieldPctEl) this.shieldPctEl.textContent = Math.round(ship.shield) + '%';
-    }
->>>>>>> 5ef924e2d94ea81fec07d8cb4ae44ccda6d26a7a
         
         // Colors warning levels
         hullBar.className = 'hud-gauge-bar-fill';
@@ -995,8 +872,8 @@ class Game {
         }
 
         // Shield bar sync
-        const shieldBar = this.shieldBarEl;
-        const shieldPct = this.shieldPctEl;
+        const shieldBar = document.getElementById('shield-bar');
+        const shieldPct = document.getElementById('shield-pct');
         shieldBar.style.width = ship.shield + '%';
         shieldPct.textContent = Math.round(ship.shield) + '%';
     }
@@ -1338,8 +1215,12 @@ class Laser {
 
     draw(ctx) {
         ctx.save();
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = 10;
         ctx.fillStyle = this.color;
-        ctx.fillRect(this.x - this.width / 2, this.y, this.width, this.height);
+        ctx.beginPath();
+        ctx.rect(this.x - this.width / 2, this.y, this.width, this.height);
+        ctx.fill();
         ctx.restore();
     }
 }
@@ -1377,7 +1258,15 @@ class Powerup {
         const pulse = 1.0 + Math.sin(Date.now() * 0.01) * 0.1;
         const drawRadius = this.radius * pulse;
 
-        ctx.fillStyle = this.color;
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = 14;
+        
+        // Inner gradient
+        const grad = ctx.createRadialGradient(0, 0, drawRadius * 0.2, 0, 0, drawRadius);
+        grad.addColorStop(0, '#fff');
+        grad.addColorStop(0.5, this.color);
+        grad.addColorStop(1, 'rgba(0,0,0,0.6)');
+        ctx.fillStyle = grad;
         
         ctx.beginPath();
         ctx.arc(0, 0, drawRadius, 0, Math.PI * 2);
@@ -1423,7 +1312,12 @@ class Particle {
         ctx.fillStyle = this.color;
         
         // Dynamic blur
-        ctx.fillRect(this.x - this.size, this.y - this.size, this.size * 2, this.size * 2);
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = this.size * 2;
+        
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
         ctx.restore();
     }
 }
