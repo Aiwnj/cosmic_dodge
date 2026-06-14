@@ -32,15 +32,21 @@
 }
 
 body {
-    background-color: var(--color-bg-deep);
+    background-color: #02010b;
     color: var(--color-text);
     font-family: var(--font-ui);
     height: 100vh;
     overflow: hidden;
-    background-image: 
-        radial-gradient(circle at 10% 20%, rgba(123, 44, 191, 0.15) 0%, transparent 40%),
-        radial-gradient(circle at 90% 80%, rgba(0, 240, 255, 0.1) 0%, transparent 45%);
+    background-image:
+        radial-gradient(circle at 15% 15%, rgba(0, 240, 255, 0.18) 0%, transparent 28%),
+        radial-gradient(circle at 85% 18%, rgba(255, 0, 127, 0.16) 0%, transparent 30%),
+        radial-gradient(circle at 50% 60%, rgba(120, 58, 255, 0.12) 0%, transparent 22%),
+        radial-gradient(circle at 25% 75%, rgba(255, 255, 255, 0.08) 0%, transparent 12%),
+        radial-gradient(circle at 70% 82%, rgba(255, 255, 255, 0.06) 0%, transparent 14%),
+        linear-gradient(180deg, #04030c 0%, #050419 45%, #070819 100%);
     background-size: cover;
+    background-attachment: fixed;
+    background-repeat: no-repeat;
 }
 
 #app {
