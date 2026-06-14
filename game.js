@@ -11,12 +11,27 @@ const STATE = {
 class Game {
     constructor() {
         this.canvas = document.getElementById('game-canvas');
-        this.ctx = this.canvas.getContext('2d');
+        this.ctx = this.canvas.getContext('2d', { alpha: false });
         this.state = STATE.START;
         
         // Base dimensions (virtual resolution)
         this.width = 800;
         this.height = 600;
+        
+        // Cache HUD DOM refs for lower frame cost
+        this.hudScoreEl = document.getElementById('hud-score');
+        this.hudLevelEl = document.getElementById('hud-level');
+        this.hullBarEl = document.getElementById('hull-bar');
+        this.hullPctEl = document.getElementById('hull-pct');
+        this.shieldBarEl = document.getElementById('shield-bar');
+        this.shieldPctEl = document.getElementById('shield-pct');
+        this.hudHighscoreEl = document.getElementById('hud-highscore');
+        this.finalScoreEl = document.getElementById('final-score');
+        this.finalLevelEl = document.getElementById('final-level');
+        this.screenOverlay = document.getElementById('screen-overlay');
+        this.startScreen = document.getElementById('start-screen');
+        this.gameOverScreen = document.getElementById('game-over-screen');
+        this.pauseScreen = document.getElementById('pause-screen');
         
         // High Score Persistence (Safe from local file system SecurityError)
         let savedHighScore = 0;
@@ -26,7 +41,9 @@ class Game {
             console.warn("localStorage is not accessible in this context:", e);
         }
         this.highscore = savedHighScore;
-        document.getElementById('hud-highscore').textContent = this.pad(this.highscore, 6);
+        if (this.hudHighscoreEl) {
+            this.hudHighscoreEl.textContent = this.pad(this.highscore, 6);
+        }
 
         // Core Game Entities
         this.spaceship = null;
@@ -48,9 +65,10 @@ class Game {
         this.handX = this.width / 2;
 
         // Performance tuning
-        this.maxParticles = 300; // hard cap for particle effects
+        this.maxParticles = 150; // hard cap for particle effects
         this.hudUpdateCounter = 0;
-        this.hudUpdateInterval = 6; // update HUD DOM every 6 frames
+        this.hudUpdateInterval = 12; // update HUD DOM every 12 frames
+        this.starCount = 70;
         
         // Screenshake
         this.shakeIntensity = 0;
@@ -112,14 +130,13 @@ class Game {
 
     initStars() {
         this.stars = [];
-        // Fewer background stars to reduce draw cost
-        for (let i = 0; i < 100; i++) {
+        for (let i = 0; i < this.starCount; i++) {
             this.stars.push({
                 x: Math.random() * this.width,
                 y: Math.random() * this.height,
-                size: Math.random() * 2 + 0.5,
-                speed: Math.random() * 1.5 + 0.2,
-                color: `hsla(${200 + Math.random() * 60}, 100%, 85%, ${Math.random() * 0.4 + 0.3})`
+                size: Math.random() * 1.4 + 0.4,
+                speed: Math.random() * 1.2 + 0.2,
+                color: `hsla(${200 + Math.random() * 60}, 100%, 85%, ${Math.random() * 0.3 + 0.25})`
             });
         }
     }
@@ -138,9 +155,7 @@ class Game {
     drawStars() {
         this.stars.forEach(star => {
             this.ctx.fillStyle = star.color;
-            this.ctx.beginPath();
-            this.ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
-            this.ctx.fill();
+            this.ctx.fillRect(star.x, star.y, star.size, star.size);
         });
     }
 
@@ -251,10 +266,10 @@ class Game {
         window.audio.resumeContext();
         
         // Hide Screens
-        document.getElementById('screen-overlay').classList.add('hidden');
-        document.getElementById('start-screen').classList.add('hidden');
-        document.getElementById('game-over-screen').classList.add('hidden');
-        document.getElementById('pause-screen').classList.add('hidden');
+        if (this.screenOverlay) this.screenOverlay.classList.add('hidden');
+        if (this.startScreen) this.startScreen.classList.add('hidden');
+        if (this.gameOverScreen) this.gameOverScreen.classList.add('hidden');
+        if (this.pauseScreen) this.pauseScreen.classList.add('hidden');
         
         // Show HUD
         document.getElementById('hud').classList.remove('hidden');
@@ -280,14 +295,14 @@ class Game {
     pauseGame() {
         if (this.state !== STATE.PLAYING) return;
         this.state = STATE.PAUSED;
-        document.getElementById('screen-overlay').classList.remove('hidden');
-        document.getElementById('pause-screen').classList.remove('hidden');
+        if (this.screenOverlay) this.screenOverlay.classList.remove('hidden');
+        if (this.pauseScreen) this.pauseScreen.classList.remove('hidden');
     }
 
     resumeGame() {
         if (this.state !== STATE.PAUSED) return;
-        document.getElementById('screen-overlay').classList.add('hidden');
-        document.getElementById('pause-screen').classList.add('hidden');
+        if (this.screenOverlay) this.screenOverlay.classList.add('hidden');
+        if (this.pauseScreen) this.pauseScreen.classList.add('hidden');
         this.state = STATE.PLAYING;
     }
 
@@ -300,9 +315,9 @@ class Game {
         const shipY = this.spaceship.y;
         
         // Spawn massive blast particles (fire and neon shockwaves)
-        this.createSparks(shipX, shipY, '#ff007f', 40); // Magenta blast
-        this.createSparks(shipX, shipY, '#00f0ff', 40); // Cyan blast
-        this.createSparks(shipX, shipY, '#ffffff', 20); // White core blast
+        this.createSparks(shipX, shipY, '#ff007f', 22); // Magenta blast
+        this.createSparks(shipX, shipY, '#00f0ff', 22); // Cyan blast
+        this.createSparks(shipX, shipY, '#ffffff', 12); // White core blast
         
         this.createRippleWave(shipX, shipY, '#ff007f'); // Magenta shockwave
         setTimeout(() => this.createRippleWave(shipX, shipY, '#00f0ff'), 150); // Cyan shockwave
@@ -331,16 +346,17 @@ class Game {
             } catch (e) {
                 console.warn("Could not save high score to localStorage:", e);
             }
-            document.getElementById('hud-highscore').textContent = this.pad(this.highscore, 6);
+            if (this.hudHighscoreEl) {
+                this.hudHighscoreEl.textContent = this.pad(this.highscore, 6);
+            }
         }
 
         // Show game over screens
-        document.getElementById('final-score').textContent = this.score;
-        document.getElementById('final-level').textContent = this.level;
+        if (this.finalScoreEl) this.finalScoreEl.textContent = this.score;
+        if (this.finalLevelEl) this.finalLevelEl.textContent = this.level;
         document.getElementById('hud').classList.add('hidden');
-        
-        document.getElementById('screen-overlay').classList.remove('hidden');
-        document.getElementById('game-over-screen').classList.remove('hidden');
+        if (this.screenOverlay) this.screenOverlay.classList.remove('hidden');
+        if (this.gameOverScreen) this.gameOverScreen.classList.remove('hidden');
     }
 
     // Dynamic configuration UI based on model classes
@@ -639,8 +655,11 @@ class Game {
                 const meteor = this.meteors[mIdx];
                 
                 // Circle-AABB approximation (simple circle vs circle is faster and good enough here)
-                const dist = Math.hypot(laser.x - meteor.x, laser.y - meteor.y);
-                if (dist < meteor.radius + 6) {
+                const dx = laser.x - meteor.x;
+                const dy = laser.y - meteor.y;
+                const distSq = dx * dx + dy * dy;
+                const radiusSq = (meteor.radius + 6) * (meteor.radius + 6);
+                if (distSq < radiusSq) {
                     // Hit!
                     meteor.health--;
                     this.lasers.splice(lIdx, 1);
@@ -664,10 +683,13 @@ class Game {
         const ship = this.spaceship;
         for (let mIdx = this.meteors.length - 1; mIdx >= 0; mIdx--) {
             const meteor = this.meteors[mIdx];
-            const dist = Math.hypot(ship.x - meteor.x, ship.y - meteor.y);
+            const dx = ship.x - meteor.x;
+            const dy = ship.y - meteor.y;
+            const distSq = dx * dx + dy * dy;
+            const radiusSq = (meteor.radius + ship.hitRadius) * (meteor.radius + ship.hitRadius);
             
             // Check bounding circle collision
-            if (dist < meteor.radius + ship.hitRadius) {
+            if (distSq < radiusSq) {
                 const damage = meteor.radius * 0.8;
                 
                 if (ship.shield > 0) {
@@ -710,9 +732,11 @@ class Game {
         // 3. Spaceship vs Powerups
         for (let pIdx = this.powerups.length - 1; pIdx >= 0; pIdx--) {
             const pu = this.powerups[pIdx];
-            const dist = Math.hypot(ship.x - pu.x, ship.y - pu.y);
+            const dx = ship.x - pu.x;
+            const dy = ship.y - pu.y;
+            const distSq = dx * dx + dy * dy;
             
-            if (dist < pu.radius + ship.hitRadius) {
+            if (distSq < (pu.radius + ship.hitRadius) * (pu.radius + ship.hitRadius)) {
                 // Collect powerup!
                 this.applyPowerup(pu.type);
                 this.powerups.splice(pIdx, 1);
@@ -792,8 +816,8 @@ class Game {
     }
 
     createRippleWave(x, y, color) {
-        for (let i = 0; i < 30; i++) {
-            const angle = (i / 30) * Math.PI * 2;
+        for (let i = 0; i < 18; i++) {
+            const angle = (i / 18) * Math.PI * 2;
             const speed = 3.5;
             this.particles.push(new Particle(
                 x, y,
@@ -811,8 +835,8 @@ class Game {
     }
 
     createLevelUpWave() {
-        for (let i = 0; i < 60; i++) {
-            const angle = (i / 60) * Math.PI * 2;
+        for (let i = 0; i < 32; i++) {
+            const angle = (i / 32) * Math.PI * 2;
             const speed = 5;
             this.particles.push(new Particle(
                 this.width / 2, this.height / 2,
@@ -831,8 +855,8 @@ class Game {
 
     // Sync HUD Text
     updateHUD() {
-        document.getElementById('hud-score').textContent = this.pad(this.score, 6);
-        document.getElementById('hud-level').textContent = this.level;
+        if (this.hudScoreEl) this.hudScoreEl.textContent = this.pad(this.score, 6);
+        if (this.hudLevelEl) this.hudLevelEl.textContent = this.level;
     }
 
     // Sync HUD gauges smoothly
@@ -842,10 +866,25 @@ class Game {
         const ship = this.spaceship;
         
         // Hull bar sync
-        const hullBar = document.getElementById('hull-bar');
-        const hullPct = document.getElementById('hull-pct');
-        hullBar.style.width = ship.health + '%';
-        hullPct.textContent = Math.round(ship.health) + '%';
+        if (this.hullBarEl) {
+            this.hullBarEl.style.width = ship.health + '%';
+            this.hullBarEl.className = 'hud-gauge-bar-fill';
+            if (ship.health > 50) {
+                this.hullBarEl.classList.add('green-glow');
+            } else if (ship.health > 25) {
+                this.hullBarEl.classList.add('orange-glow');
+            } else {
+                this.hullBarEl.classList.add('red-glow');
+            }
+        }
+        if (this.hullPctEl) this.hullPctEl.textContent = Math.round(ship.health) + '%';
+
+        // Shield bar sync
+        if (this.shieldBarEl) {
+            this.shieldBarEl.style.width = ship.shield + '%';
+        }
+        if (this.shieldPctEl) this.shieldPctEl.textContent = Math.round(ship.shield) + '%';
+    }
         
         // Colors warning levels
         hullBar.className = 'hud-gauge-bar-fill';
@@ -1201,12 +1240,8 @@ class Laser {
 
     draw(ctx) {
         ctx.save();
-        ctx.shadowColor = this.color;
-        ctx.shadowBlur = 10;
         ctx.fillStyle = this.color;
-        ctx.beginPath();
-        ctx.rect(this.x - this.width / 2, this.y, this.width, this.height);
-        ctx.fill();
+        ctx.fillRect(this.x - this.width / 2, this.y, this.width, this.height);
         ctx.restore();
     }
 }
@@ -1244,15 +1279,7 @@ class Powerup {
         const pulse = 1.0 + Math.sin(Date.now() * 0.01) * 0.1;
         const drawRadius = this.radius * pulse;
 
-        ctx.shadowColor = this.color;
-        ctx.shadowBlur = 14;
-        
-        // Inner gradient
-        const grad = ctx.createRadialGradient(0, 0, drawRadius * 0.2, 0, 0, drawRadius);
-        grad.addColorStop(0, '#fff');
-        grad.addColorStop(0.5, this.color);
-        grad.addColorStop(1, 'rgba(0,0,0,0.6)');
-        ctx.fillStyle = grad;
+        ctx.fillStyle = this.color;
         
         ctx.beginPath();
         ctx.arc(0, 0, drawRadius, 0, Math.PI * 2);
@@ -1298,12 +1325,7 @@ class Particle {
         ctx.fillStyle = this.color;
         
         // Dynamic blur
-        ctx.shadowColor = this.color;
-        ctx.shadowBlur = this.size * 2;
-        
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.fillRect(this.x - this.size, this.y - this.size, this.size * 2, this.size * 2);
         ctx.restore();
     }
 }
